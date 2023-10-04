@@ -1,9 +1,16 @@
 package k8spspallowedusers
 
+import data.lib.exclude_update.is_update
+import data.lib.exempt_container.is_exempt
+
 violation[{"msg": msg}] {
+  # runAsUser, runAsGroup, supplementalGroups, fsGroup fields are immutable.
+  not is_update(input.review)
+
   fields := ["runAsUser", "runAsGroup", "supplementalGroups", "fsGroup"]
   field := fields[_]
   container := input_containers[_]
+  not is_exempt(container)
   msg := get_type_violation(field, container)
 }
 
@@ -117,4 +124,7 @@ input_containers[c] {
 }
 input_containers[c] {
   c := input.review.object.spec.initContainers[_]
+}
+input_containers[c] {
+    c := input.review.object.spec.ephemeralContainers[_]
 }

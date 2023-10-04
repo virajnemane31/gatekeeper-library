@@ -61,6 +61,11 @@ test_input_disallowed_x2 {
     results := violation with input as input
     count(results) == 2
 }
+test_input_disallowed_x2_but_exempt {
+    input := { "review": input_review([cadd(["three"]), cadd(["three", "two"])]), "parameters": {"allowedCapabilities": ["one", "two"], "exemptImages": ["nginx"]}}
+    results := violation with input as input
+    count(results) == 0
+}
 
 
 test_input_empty_drop {
@@ -103,6 +108,11 @@ test_input_drop_undefined_x2 {
    results := violation with input as input
    count(results) == 2
 }
+test_input_drop_undefined_x2_but_exempt {
+   input := { "review": input_review([cadd([]), cadd([])]), "parameters": {"requiredDropCapabilities": ["one", "two"], "exemptImages": ["nginx"]}}
+   results := violation with input as input
+   count(results) == 0
+}
 test_input_drop_literal_all {
    input := { "review": input_review([cdrop(["ALL"])]), "parameters": {"requiredDropCapabilities": ["one", "two"]}}
    results := violation with input as input
@@ -122,6 +132,12 @@ test_input_drop_literal_all_x2 {
    input := { "review": input_review([cdrop(["ALL", "two"])]), "parameters": {"requiredDropCapabilities": ["one", "two"]}}
    results := violation with input as input
    count(results) == 0
+}
+
+test_update {
+    input := { "review": object.union(input_review([cadd(["one"])]), {"operation": "UPDATE"}), "parameters": {"allowedCapabilities": []}}
+    results := violation with input as input
+    count(results) == 0
 }
 
 # init containers
@@ -185,6 +201,11 @@ test_input_disallowed_x2 {
     results := violation with input as input
     count(results) == 2
 }
+test_input_disallowed_x2_but_exempt {
+    input := { "review": input_init_review([cadd(["three"]), cadd(["three", "two"])]), "parameters": {"allowedCapabilities": ["one", "two"], "exemptImages": ["nginx"]}}
+    results := violation with input as input
+    count(results) == 0
+}
 
 
 test_input_empty_drop {
@@ -226,6 +247,11 @@ test_input_drop_undefined_x2 {
    input := { "review": input_init_review([cadd([]), cadd([])]), "parameters": {"requiredDropCapabilities": ["one", "two"]}}
    results := violation with input as input
    count(results) == 2
+}
+test_input_drop_undefined_x2_but_exempt {
+   input := { "review": input_init_review([cadd([]), cadd([])]), "parameters": {"requiredDropCapabilities": ["one", "two"], "exemptImages": ["nginx"]}}
+   results := violation with input as input
+   count(results) == 0
 }
 test_input_drop_literal_all {
    input := { "review": input_init_review([cdrop(["ALL"])]), "parameters": {"requiredDropCapabilities": ["one", "two"]}}
@@ -284,6 +310,7 @@ input_init_review(containers) = output {
 
 cdrop(drop) = output {
   output := {
+    "image": "nginx",
     "securityContext": {
      "capabilities": {
        "drop": drop
@@ -294,6 +321,7 @@ cdrop(drop) = output {
 
 cadd(add) = output {
   output := {
+    "image": "nginx",
     "securityContext": {
      "capabilities": {
        "add": add

@@ -19,7 +19,7 @@ package k8spspallowedusers
 #     - omits "ranges" field if <rule-ranges> is null
 #   range(<min-val>, <max-val>)
 #     - Returns a range object with  { "min": <min-val>, "max": <max-val> }
-# Wrap rule in runAsUser, or 
+# Wrap rule in runAsUser, or
 
 ## Other Functions ##
 # run_as_rule("runAsUser" value, "runAsGroup" value, "supplementalGroups" value, "fsGroup" value)
@@ -112,6 +112,11 @@ test_user_one_container_run_in_range_user_between_ranges {
   input := { "review": review(null, [ctr("cont1", runAsUser(200))], null), "parameters": user_mustrunas_two_ranges }
   results := violation with input as input
   count(results) == 1
+}
+test_user_one_container_run_in_range_user_between_ranges_but_exempt {
+  input := { "review": review(null, [ctr("cont1", runAsUser(200))], null), "parameters": object.union(user_mustrunas_two_ranges, {"exemptImages": ["nginx"]}) }
+  results := violation with input as input
+  count(results) == 0
 }
 
 test_non_root_container_pod_conflict {
@@ -807,8 +812,11 @@ test_mixed_container_level_all_defined_mixed_in_range_mixed_rules {
   count(results) == 1
 }
 
-
-
+test_update {
+  input := {"review": object.union(review(null, [ctr("cont1", run_as_rule(150, 150, null, null))], null), {"operation": "UPDATE"}), "parameters": mixed_all_rules }
+  results := violation with input as input
+  count(results) == 0
+}
 
 
 ## Functions ##
@@ -830,25 +838,25 @@ review(context, containers, initContainers) = out {
 }
 
 ctr(name, context) = out {
-  name_obj := { "name": name }
+  name_obj := { "name": name, "image": "nginx" }
   sec := obj_if_exists("securityContext", context)
   out = object.union(name_obj, sec)
 }
 
 runAsUser(user) = out {
-	out = run_as_rule(user, null, null, null)
+  out = run_as_rule(user, null, null, null)
 }
 runAsNonRoot(bool) = out {
   out = {"runAsNonRoot": bool}
 }
 runAsGroup(group) = out {
-	out = run_as_rule(null, group, null, null)
+  out = run_as_rule(null, group, null, null)
 }
 supplementalGroups(supplemental) = out {
-	out = run_as_rule(null, null, supplemental, null)
+  out = run_as_rule(null, null, supplemental, null)
 }
 fsGroup(fsgroup) = out {
-	out = run_as_rule(null, null, null, fsgroup)
+  out = run_as_rule(null, null, null, fsgroup)
 }
 run_as_rule(user, group, supplemental, fsgroup) = out {
   user_obj := obj_if_exists("runAsUser", user)

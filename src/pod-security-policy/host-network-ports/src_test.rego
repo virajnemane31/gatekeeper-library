@@ -35,6 +35,17 @@ test_input_with_hostnetwork_container_ports_not_allowed {
     results := violation with input as input
     count(results) == 1
 }
+test_input_with_hostnetwork_container_ports_not_allowed_but_exempt {
+    input := { "review": input_review_with_hostnetwork_port_outofrange, "parameters": input_parameters_exempt}
+    results := violation with input as input
+    trace(sprintf("%v", [results]))
+    count(results) == 0
+}
+test_update {
+    input := { "review": object.union(input_review_no_hostnetwork_container_ports_outofrange, {"operation": "UPDATE"}), "parameters": input_parameters_ports}
+    results := violation with input as input
+    count(results) == 0
+}
 
 input_review = {
     "object": {
@@ -156,6 +167,13 @@ input_parameters_ports = {
 }
 
 input_parameters_ports_no_hostnetwork = {
+    "min": 80,
+    "max": 9000
+}
+
+input_parameters_exempt = {
+    "exemptImages": ["nginx"], 
+    "hostNetwork": true,
     "min": 80,
     "max": 9000
 }

@@ -17,6 +17,20 @@ setup() {
   kubectl config set-context --current --namespace default
 }
 
+@test "all policies are listed in kustomization.yaml" {
+  pushd library/general/
+  kustomize edit add resource $(find ./ -type d -maxdepth 1 -mindepth 1 -exec basename {} \;)
+  run git diff --quiet kustomization.yaml
+  assert_success
+  popd
+
+  pushd library/pod-security-policy/
+  kustomize edit add resource $(find ./ -type d -maxdepth 1 -mindepth 1 -exec basename {} \;)
+  run git diff --quiet kustomization.yaml
+  assert_success
+  popd
+}
+
 @test "gatekeeper-controller-manager is running" {
   wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "kubectl -n gatekeeper-system wait --for=condition=Ready --timeout=60s pod -l control-plane=controller-manager"
 }
@@ -46,6 +60,12 @@ setup() {
   wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io gatekeeper-validating-webhook-configuration"
 }
 
+@test "unset default storageclasses so tests function properly" {
+  kubectl get storageclass --no-headers=true -o custom-columns=":metadata.name" | while read line; do
+    kubectl annotate storageclass $line storageclass.kubernetes.io/is-default-class-
+  done
+}
+
 @test "applying sync config" {
   kubectl apply -f ${BATS_TESTS_DIR}/sync.yaml
 }
@@ -65,9 +85,6 @@ setup() {
     if [ -d "$policy" ]; then
       local policy_group=$(basename "$(dirname "$policy")")
       local template_name=$(basename "$policy")
-      if [[ $policy_group == "experimental"  ]]; then
-        continue
-      fi
       echo "running integration test against policy group: $policy_group, constraint template: $template_name"
       # apply template
       wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "kubectl apply -k $policy"
@@ -76,8 +93,16 @@ setup() {
         echo "testing sample constraint: $(basename "$sample")"
         # apply constraint
         wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "kubectl apply -f ${sample}/constraint.yaml"
-        local name=$(yq e .metadata.name "$sample"/constraint.yaml )
+        local name=$(yq e .metadata.name "$sample"/constraint.yaml)
         wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "constraint_enforced $kind $name"
+
+        for inventory in "$sample"/example_inventory*.yaml; do
+          if [[ -e "$inventory" ]]; then
+            run kubectl apply -f "$inventory"
+            assert_match 'created' "$output"
+            assert_success
+          fi
+        done
 
         for allowed in "$sample"/example_allowed*.yaml; do
           if [[ -e "$allowed" ]]; then
@@ -94,14 +119,23 @@ setup() {
           if [[ -e "$disallowed" ]]; then
             # apply resource
             run kubectl apply -f "$disallowed"
-            assert_match 'denied the request' "${output}"
+            assert_match_either 'denied the request' 'no matches for kind' "${output}"
             assert_failure
             # delete resource
-            kubectl delete --ignore-not-found -f "$disallowed"
+            run kubectl delete --ignore-not-found -f "$disallowed"
           fi
         done
+
+        # delete inventory resources
+        for inventory in "$sample"/example_inventory*.yaml; do
+          if [[ -e "$inventory" ]]; then
+            kubectl delete --ignore-not-found -f "$inventory"
+          fi
+        done
+
         # delete constraint
-        kubectl delete -f "$sample"/constraint.yaml
+        wait_for_process ${WAIT_TIME} ${SLEEP_TIME} "kubectl delete -f ${sample}/constraint.yaml"
+
       done
       # delete template
       kubectl delete -k "$policy"
